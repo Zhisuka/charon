@@ -5,7 +5,7 @@ import { fetchJupiterAsset, fetchJupiterHolders, fetchJupiterChartContext } from
 import { fetchSavedWalletExposure } from '../enrichment/wallets.js';
 import { fetchTwitterNarrative } from '../enrichment/twitter.js';
 import { gmgnLink } from '../format.js';
-
+import { fetchTokenAuthority } from '../enrichment/tokenAuthority.js';
 export function buildFeeSnapshot(fee, signature) {
   return {
     mint: fee.mint,
@@ -110,7 +110,12 @@ export function filterCandidate(candidate) {
     if (candidate.trending.is_wash_trading === true || candidate.trending.is_wash_trading === 1) {
       failures.push('trending wash trading');
     }
-  }
+  }// Token authority guard (Phase 1 - Ponyin)
+    if (process.env.ENABLE_TOKEN_AUTHORITY_GUARD === 'true') {
+        if (candidate.authorityRisk?.checked && candidate.authorityRisk?.mintAuthorityActive) {
+              failures.push('mint authority active');
+                  }
+                    }
 
   return { passed: failures.length === 0, failures, strategy: strat.id };
 }
@@ -122,7 +127,7 @@ export async function buildCandidate({ mint, fee = null, signature = null, gradu
   const holders = await fetchJupiterHolders(mint);
   const chart = await fetchJupiterChartContext(mint);
   const savedWalletExposure = await fetchSavedWalletExposure(mint, holders);
-  const twitterNarrative = await fetchTwitterNarrative(graduatedCoin || jupiterAsset, gmgn);
+  const twitterNarrative = await fetchTwitterNarrative(graduatedCoin || jupiterAsset,const authorityRisk = await fetchTokenAuthority(mint); gmgn);
   const priceUsd = firstPositiveNumber(tokenPriceFromGmgn(gmgn), jupiterAsset?.usdPrice, trendingToken?.price);
   const marketCapUsd = firstPositiveNumber(
     marketCapFromGmgn(gmgn),
@@ -183,7 +188,7 @@ export async function buildCandidate({ mint, fee = null, signature = null, gradu
     holders,
     chart,
     savedWalletExposure,
-    twitterNarrative,
+    twitterNarrative,authorityRisk,
     createdAtMs: now(),
   };
   candidate.filters = filterCandidate(candidate);
