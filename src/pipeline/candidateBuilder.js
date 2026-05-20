@@ -6,6 +6,8 @@ import { fetchSavedWalletExposure } from '../enrichment/wallets.js';
 import { fetchTwitterNarrative } from '../enrichment/twitter.js';
 import { gmgnLink } from '../format.js';
 import { fetchTokenAuthority } from '../enrichment/tokenAuthority.js';
+import { checkVolumeFeeHealth } from '../enrichment/volumeFeeRisk.js';
+import { checkHolderRisk } from '../enrichment/holderRisk.js';
 
 export function buildFeeSnapshot(fee, signature) {
   return {
@@ -113,11 +115,21 @@ export function filterCandidate(candidate) {
     }
   }
 
-  // Token authority guard (Phase 1 - Ponyin)
+  // Phase 1 - Token authority guard (Ponyin)
   if (process.env.ENABLE_TOKEN_AUTHORITY_GUARD === 'true') {
     if (candidate.authorityRisk?.checked && candidate.authorityRisk?.mintAuthorityActive) {
       failures.push('mint authority active');
     }
+  }
+
+  // Phase 2 - Holder cluster risk (Ponyin)
+  if (candidate.holderRisk?.shouldReject) {
+    failures.push(`holder cluster risk: ${candidate.holderRisk.riskFlags.join(', ')}`);
+  }
+
+  // Phase 3 - Volume vs fee health (Ponyin)
+  if (candidate.volumeFeeRisk?.checked && candidate.volumeFeeRisk?.criticalLowHealth) {
+    failures.push(`volume fee health critical: ${candidate.volumeFeeRisk.feeHealth}`);
   }
 
   return { passed: failures.length === 0, failures, strategy: strat.id };
@@ -196,6 +208,11 @@ export async function buildCandidate({ mint, fee = null, signature = null, gradu
     authorityRisk,
     createdAtMs: now(),
   };
+
+  // Phase 2 & 3 - computed after candidate is built
+  candidate.holderRisk = checkHolderRisk(candidate);
+  candidate.volumeFeeRisk = checkVolumeFeeHealth(candidate);
+
   candidate.filters = filterCandidate(candidate);
   return candidate;
-}
+      }
