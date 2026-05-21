@@ -215,4 +215,4 @@ export async function buildCandidate({ mint, fee = null, signature = null, gradu
 
   candidate.filters = filterCandidate(candidate);
   return candidate;
-      }
+}
